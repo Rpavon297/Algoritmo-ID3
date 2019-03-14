@@ -14,6 +14,9 @@ class Fila:
         for elem in natributos:
             self.nombres.append(elem)
 
+    def getDecision(self):
+        return self.atributos[-1] == "si"
+
     def removeAtributo(self, nombre):
         if nombre in self.nombres:
             del self.atributos[self.nombres.index(nombre)]
@@ -25,6 +28,9 @@ class Fila:
 
     def getAtributos(self):
         return self.atributos
+
+    def getNColumnas(self):
+        return len(self.atributos)
 
 class Tabla:
     def __init__(self,cabecera = [], nfilas = []):
@@ -42,6 +48,9 @@ class Tabla:
                 if fila[j] not in self.dominio[j]:
                     self.dominio[j].append(fila[j])
 
+
+    def getNColumnas(self):
+        return len(self.atributos)
 
     def removeFila(self, i):
         if i < len(self.filas):
@@ -61,11 +70,11 @@ class Tabla:
     def merito(self):
         mejor = 0
         ret = None
-        for columna in self.atributos:
-            aux = self.meritoCol(columna)
 
-            if aux == -2: return "NEGATIVO"
-            if aux == -1: return "POSITIVO"
+        for i in range(len(self.atributos) - 1):
+            columna = self.atributos[i]
+
+            aux = self.meritoCol(columna)
 
             if aux > mejor:
                 mejor = aux
@@ -87,11 +96,8 @@ class Tabla:
 
                     if fila[-1] == "si":
                         posis[i] = posis[i] + 1
-        if 0 not in posis:
-            return -1
-        if sum(posis) == 0:
-            return -2
-        for i, in range(len(self.dominio)):
+
+        for i in range(len(self.dominio[index])):
             p = posis[i]/cont[i]
             n = 1-p
             r = sum(cont)
@@ -107,13 +113,18 @@ class Tabla:
         return self.dominio[self.atributos.index(atributo)]
 
     def sesgar(self, valor):
-        atributo = self.atributos.index(valor)
+        for i, columna in enumerate(self.dominio):
+            if valor in columna:
+                atributo = self.atributos[i]
+                for i,fila in enumerate(self.filas):
+                    if fila.getAtributo(atributo) == valor:
+                        del self.filas[i]
+                    else:
+                        self.filas[i].removeAtributo(atributo)
 
-        for i,fila in enumerate(self.filas):
-            if fila[self.atributos.index(atributo)] == valor:
-                del self.filas[i]
-            else:
-                del fila[self.atributos.index(atributo)]
+                self.dominio.remove(columna)
+                self.atributos.remove(atributo)
+
 
 class ID3:
     def __init__(self, tabla = None):
@@ -143,12 +154,23 @@ class Controlador:
 
     def go(self):
         algoritmo = ID3(self.tabla)
-        algoritmo.go()
+        raiz = algoritmo.go()
+        self.mostrar(raiz)
+
+    def mostrar(self, raiz):
+        print("LLega a " + str(raiz.getRaiz()) + " a través de " + str(raiz.getPadre()))
+
+        for hijo in raiz.getHijos():
+            self.mostrar(hijo)
+
 class Nodo:
     def __init__(self,raiz = None, padre = None):
         self.raiz = raiz
         self.padre = padre
         self.hijos = []
+
+    def getPadre(self):
+        return self.padre
 
     def getRaiz(self):
         return self.raiz
@@ -156,24 +178,39 @@ class Nodo:
     def setHijo(self, hijo):
         self.hijos.append(hijo)
 
+    def getHijos(self):
+        return self.hijos
+
 class ID3:
     def __init__(self, tabla = None):
         self.tabla = tabla
 
     def go(self):
         atributo = self.tabla.merito()
-        raiz = Nodo(atributo)
+        raiz = Nodo(atributo,None)
 
         for elem in self.tabla.getDominio(atributo):
-            ntabla = self.tabla.copy().sesgar(elem)
-            self.recurrir(ntabla,raiz,elem)
-        print("stop3")
+            nuevo = Nodo(atributo, elem)
+            raiz.setHijo(nuevo)
 
-    def recurrir(self, tabla,padre,var):
-        pos = np.zeros(len(tabla))
-        if len(tabla[0]) == 2:
-            for i, fila in enumerate(tabla):
-                if fila[-1] == "si":
+            self.recurrir(self.tabla,nuevo,elem)
+        return raiz
+
+    def recurrir(self, tabla, padre, valor):
+        tabla.sesgar(valor)
+
+        #Solo una fila
+        if len(tabla.getFilas()) == 1:
+            raiz = "si"
+            if not tabla.getFila(0).getDecision():
+                raiz = "no"
+            padre.setHijo(Nodo(raiz,"cualquiera"))
+        #Solo una columna
+        elif tabla.getNColumnas() == 2:
+            pos = np.zeros(len(tabla.getFilas()))
+
+            for i, fila in enumerate(tabla.getFilas()):
+                if fila.getDecision():
                     pos[i] = pos[i] + 1
 
             if 0 not in pos:
@@ -185,16 +222,15 @@ class ID3:
                     raiz = "si"
                     if p == 0: raiz = "no"
 
-                    padre.setHijo(Nodo(raiz,tabla[i]))
-
+                    padre.setHijo(Nodo(raiz,tabla.getFilas()[i][0]))
         else:
-            ntabla =  tabla.copy().sesgar(var)
+            atributo = tabla.merito()
 
-            att = ntabla.merito()
-            raiz = Nodo(att)
+            for elem in tabla.getDominio(atributo):
+                nuevo = Nodo(atributo, elem)
+                padre.setHijo(nuevo)
 
-            for elem in self.tabla.getDominio(att):
-                self.recurrir(self.tabla, raiz, elem)
+                self.recurrir(tabla,nuevo,elem)
 
 #qtCreatorFile = "GUIastar.ui"
 
