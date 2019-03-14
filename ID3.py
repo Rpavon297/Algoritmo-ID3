@@ -1,11 +1,11 @@
 import numpy as np
 
-from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QAction, QTableWidget,QTableWidgetItem,QVBoxLayout, QMessageBox
-from PyQt5 import uic, QtGui
-import math
+import kivy, math, copy
+from kivy.app import App
+from kivy.uix.label import Label
 
 class Fila:
-    def __init__(self, atributos = [], natributos = []):
+    def __init__(self, natributos = [], atributos = []):
         self.atributos = []
         self.nombres = []
 
@@ -20,6 +20,7 @@ class Fila:
     def removeAtributo(self, nombre):
         if nombre in self.nombres:
             del self.atributos[self.nombres.index(nombre)]
+            self.nombres.remove(nombre)
 
     def getAtributo(self, nombre):
         if nombre in self.nombres:
@@ -76,7 +77,7 @@ class Tabla:
 
             aux = self.meritoCol(columna)
 
-            if aux > mejor:
+            if aux < mejor:
                 mejor = aux
                 ret = columna
 
@@ -94,7 +95,7 @@ class Tabla:
                 if variable == fila.getAtributo(columna):
                     cont[i] = cont[i] + 1
 
-                    if fila[-1] == "si":
+                    if fila.getDecision():
                         posis[i] = posis[i] + 1
 
         for i in range(len(self.dominio[index])):
@@ -102,12 +103,13 @@ class Tabla:
             n = 1-p
             r = sum(cont)
 
-            merito = merito + (r * self.informacion(p,n))
+            if n == 0 or p == 0: return 0
+            else: merito = merito + (r * self.informacion(p,n))
 
         return merito
 
     def informacion(self,p,n):
-        return -p * (math.log(p,2)) - n * (math.log(n,2))
+        return -float(p) * (math.log(float(p),2)) - float(n) * (math.log(float(n),2))
 
     def getDominio(self,atributo):
         return self.dominio[self.atributos.index(atributo)]
@@ -117,11 +119,11 @@ class Tabla:
             if valor in columna:
                 atributo = self.atributos[i]
                 for i,fila in enumerate(self.filas):
-                    if fila.getAtributo(atributo) == valor:
+                    if fila.getAtributo(atributo) != valor:
                         del self.filas[i]
-                    else:
-                        self.filas[i].removeAtributo(atributo)
 
+                for fila in self.filas:
+                    fila.removeAtributo(atributo)
                 self.dominio.remove(columna)
                 self.atributos.remove(atributo)
 
@@ -155,13 +157,14 @@ class Controlador:
     def go(self):
         algoritmo = ID3(self.tabla)
         raiz = algoritmo.go()
-        self.mostrar(raiz)
+        self.mostrar(raiz, 0)
 
-    def mostrar(self, raiz):
-        print("LLega a " + str(raiz.getRaiz()) + " a través de " + str(raiz.getPadre()))
+    def mostrar(self, raiz, nivel):
+        print(str(nivel) + "-  LLega a " + str(raiz.getRaiz()) + " a través de " + str(raiz.getPadre()))
 
+        nnivel = nivel + 1
         for hijo in raiz.getHijos():
-            self.mostrar(hijo)
+            self.mostrar(hijo, nnivel)
 
 class Nodo:
     def __init__(self,raiz = None, padre = None):
@@ -181,6 +184,13 @@ class Nodo:
     def getHijos(self):
         return self.hijos
 
+    def __eq__(self,other):
+        if isinstance(other, Nodo):
+            return self.raiz == other.getRaiz() and self.padre == other.getPadre()
+        return False
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
 class ID3:
     def __init__(self, tabla = None):
         self.tabla = tabla
@@ -190,61 +200,44 @@ class ID3:
         raiz = Nodo(atributo,None)
 
         for elem in self.tabla.getDominio(atributo):
-            nuevo = Nodo(atributo, elem)
-            raiz.setHijo(nuevo)
 
-            self.recurrir(self.tabla,nuevo,elem)
+            self.recurrir(self.tabla,raiz,elem)
         return raiz
 
-    def recurrir(self, tabla, padre, valor):
-        tabla.sesgar(valor)
+    def recurrir(self, ntabla, padre, valor):
+        tabla = copy.deepcopy(ntabla)
 
-        #Solo una fila
-        if len(tabla.getFilas()) == 1:
-            raiz = "si"
-            if not tabla.getFila(0).getDecision():
-                raiz = "no"
-            padre.setHijo(Nodo(raiz,"cualquiera"))
         #Solo una columna
-        elif tabla.getNColumnas() == 2:
-            pos = np.zeros(len(tabla.getFilas()))
+        if tabla.getNColumnas() == 2:
 
             for i, fila in enumerate(tabla.getFilas()):
                 if fila.getDecision():
-                    pos[i] = pos[i] + 1
-
-            if 0 not in pos:
-                padre.setHijo(Nodo("si","cualquiera"))
-            elif sum(pos) == 0:
-                padre.setHijo(Nodo("no","cualquiera"))
-            else:
-                for i, p in enumerate(pos):
-                    raiz = "si"
-                    if p == 0: raiz = "no"
-
-                    padre.setHijo(Nodo(raiz,tabla.getFilas()[i][0]))
+                    if Nodo("si",fila.getAtributos()[0]) not in padre.getHijos():
+                        padre.setHijo(Nodo("si",fila.getAtributos()[0]))
+                else:
+                    if Nodo("no", fila.getAtributos()[0]) not in padre.getHijos():
+                        padre.setHijo(Nodo("no",fila.getAtributos()[0]))
         else:
+            tabla.sesgar(valor);
             atributo = tabla.merito()
 
-            for elem in tabla.getDominio(atributo):
-                nuevo = Nodo(atributo, elem)
-                padre.setHijo(nuevo)
+            nuevo = Nodo(atributo, valor)
+            padre.setHijo(nuevo)
 
+            for elem in tabla.getDominio(atributo):
                 self.recurrir(tabla,nuevo,elem)
 
-#qtCreatorFile = "GUIastar.ui"
+class MyApp(App):
 
-#Ui_MainWindow, QtBaseClass = uic.loadUiType(qtCreatorFile)
-
-class MyApp(QMainWindow):
-    def __init__(self):
-        super(MyApp, self).__init__()
-        self.ui = Ui_MainWindow()
+    def build(self):
+        return Label(text='Hello world')
 
 
 
 
 if __name__ == "__main__":
+    MyApp().run()
+
     controlador = Controlador()
     controlador.cargarTabla("Juego.txt", "AtributosJuego.txt")
     controlador.go()
