@@ -1,8 +1,16 @@
 import numpy as np
 
-import kivy, math, copy
-from kivy.app import App
-from kivy.uix.label import Label
+import math, time, random, sys, copy
+import numpy as np
+from PyQt5.QtGui import QStandardItemModel
+
+from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QAction, QTableWidget, QTableWidgetItem, QVBoxLayout, \
+    QMessageBox, QTreeWidgetItem, QTreeView
+from PyQt5 import uic, QtGui
+
+qtCreatorFile = "GUIID3.ui"
+
+Ui_MainWindow, QtBaseClass = uic.loadUiType(qtCreatorFile)
 
 class Fila:
     def __init__(self, natributos = [], atributos = []):
@@ -99,12 +107,13 @@ class Tabla:
                         posis[i] = posis[i] + 1
 
         for i in range(len(self.dominio[index])):
-            p = posis[i]/cont[i]
-            n = 1-p
-            r = sum(cont)
+            if posis[i] == 0 or posis[i] == cont[i]: return 0
+            else:
+                p = posis[i]/cont[i]
+                n = 1-p
+                r = sum(cont)
 
-            if n == 0 or p == 0: return 0
-            else: merito = merito + (r * self.informacion(p,n))
+                merito = merito + (r * self.informacion(p,n))
 
         return merito
 
@@ -126,45 +135,6 @@ class Tabla:
                     fila.removeAtributo(atributo)
                 self.dominio.remove(columna)
                 self.atributos.remove(atributo)
-
-
-class ID3:
-    def __init__(self, tabla = None):
-        self.tabla = tabla
-
-class Controlador:
-    def __init__(self, vista = None):
-        self.vista = vista
-        self.tabla = None
-
-    def cargarTabla(self, atributos, cabecera):
-        array = []
-
-        file = open(cabecera, "r")
-        cabeceras = file.read().strip("\n").split(",")
-        file.close()
-
-        file = open(atributos, "r")
-        atributos = file.readlines()
-
-        for linea in atributos:
-            array.append(linea.strip("\n").split(","))
-
-        del array[-1]
-        self.tabla = Tabla(cabeceras,array)
-        print("stop")
-
-    def go(self):
-        algoritmo = ID3(self.tabla)
-        raiz = algoritmo.go()
-        self.mostrar(raiz, 0)
-
-    def mostrar(self, raiz, nivel):
-        print(str(nivel) + "-  LLega a " + str(raiz.getRaiz()) + " a través de " + str(raiz.getPadre()))
-
-        nnivel = nivel + 1
-        for hijo in raiz.getHijos():
-            self.mostrar(hijo, nnivel)
 
 class Nodo:
     def __init__(self,raiz = None, padre = None):
@@ -227,17 +197,85 @@ class ID3:
             for elem in tabla.getDominio(atributo):
                 self.recurrir(tabla,nuevo,elem)
 
-class MyApp(App):
+class MyApp(QMainWindow):
+    def __init__(self):
+        super(MyApp, self).__init__()
+        self.ui = Ui_MainWindow()
+        self.ui.setupUi(self)
+        self.controlador = Controlador(self)
+        self.ui.goButton.clicked.connect(self.go)
 
-    def build(self):
-        return Label(text='Hello world')
+        model = QStandardItemModel()
+        model.setHorizontalHeaderLabels(["ATRIBUTO", "VALOR ATRIBUTO ANTERIOR:"])
 
+    def go(self):
+        self.controlador.cargarTabla(self.ui.input_att.toPlainText(), self.ui.input_cabecera.toPlainText())
+        self.controlador.go()
 
+    def mostrar(self, raiz):
+        nodos = []
+        nodo = QTreeWidgetItem()
+        nodo.setText(0, raiz.getRaiz())
+        nodo.setText(1, "")
+        nodos.append(nodo)
 
+        for hijo in raiz.getHijos():
+            nodos.append(self.recurrir(hijo,nodo))
+
+        self.ui.arbol.insertTopLevelItems(0,nodos)
+
+    def recurrir(self, raiz, nodo):
+        nodos = []
+
+        nodo = QTreeWidgetItem(raiz)
+        nodo.setText(0, raiz.getRaiz())
+        nodo.setText(1, raiz.getPadre())
+        nodos.append(nodo)
+
+        for hijo in raiz.getHijos():
+            nodos.append(self.recurrir(hijo, nodo))
+
+        return nodos
+
+class Controlador:
+    def __init__(self, vista = None):
+        self.vista = vista
+        self.tabla = None
+
+    def cargarTabla(self, atributos, cabecera):
+        array = []
+
+        file = open(cabecera, "r")
+        cabeceras = file.read().strip("\n").split(",")
+        file.close()
+
+        file = open(atributos, "r")
+        atributos = file.readlines()
+
+        for linea in atributos:
+            array.append(linea.strip("\n").split(","))
+
+        del array[-1]
+        self.tabla = Tabla(cabeceras,array)
+        print("stop")
+
+    def go(self):
+        algoritmo = ID3(self.tabla)
+        raiz = algoritmo.go()
+        cadena = self.toString(raiz)
+
+        self.vista.mostrar(raiz)
+
+    def toString(self, raiz):
+        cadena =  [str(raiz.getRaiz()),str(raiz.getPadre())]
+
+        for hijo in raiz.getHijos():
+            cadena = cadena + self.toString(hijo)
+
+        return cadena
 
 if __name__ == "__main__":
-    MyApp().run()
-
-    controlador = Controlador()
-    controlador.cargarTabla("Juego.txt", "AtributosJuego.txt")
-    controlador.go()
+    app = QApplication(sys.argv)
+    window = MyApp()
+    window.show()
+    app.exec_()
