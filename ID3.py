@@ -2,10 +2,11 @@ import numpy as np
 
 import math, time, random, sys, copy
 import numpy as np
-from PyQt5.QtGui import QStandardItemModel
+from PyQt5.QtCore import QPointF
+from PyQt5.QtGui import QStandardItemModel, QPixmap, QColor
 
 from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QAction, QTableWidget, QTableWidgetItem, QVBoxLayout, \
-    QMessageBox, QTreeWidgetItem, QTreeView
+    QMessageBox, QTreeWidgetItem, QTreeView, QGraphicsView, QGraphicsScene
 from PyQt5 import uic, QtGui
 
 qtCreatorFile = "GUIID3.ui"
@@ -60,6 +61,8 @@ class Tabla:
 
     def getNColumnas(self):
         return len(self.atributos)
+    def getNFilas(self):
+        return len(self.filas)
 
     def removeFila(self, i):
         if i < len(self.filas):
@@ -204,38 +207,71 @@ class MyApp(QMainWindow):
         self.ui.setupUi(self)
         self.controlador = Controlador(self)
         self.ui.goButton.clicked.connect(self.go)
-
-        model = QStandardItemModel()
-        model.setHorizontalHeaderLabels(["ATRIBUTO", "VALOR ATRIBUTO ANTERIOR:"])
+        self.conteo = np.zeros(0)
+        self.ui.error1.hide()
 
     def go(self):
-        self.controlador.cargarTabla(self.ui.input_att.toPlainText(), self.ui.input_cabecera.toPlainText())
+
+        self.ui.error1.hide()
+
+        try:
+            self.controlador.cargarTabla(self.ui.input_att.toPlainText(), self.ui.input_cabecera.toPlainText())
+        except:
+            self.ui.error1.show()
+
         self.controlador.go()
 
     def mostrar(self, raiz):
-        nodos = []
-        nodo = QTreeWidgetItem()
-        nodo.setText(0, raiz.getRaiz())
-        nodo.setText(1, "")
-        nodos.append(nodo)
+        scene = QGraphicsScene()
 
-        for hijo in raiz.getHijos():
-            nodos.append(self.recurrir(hijo,nodo))
+        elipse = scene.addEllipse(0,0,100,50)
+        elipse.setBrush(QColor(245, 235, 255))
 
-        self.ui.arbol.insertTopLevelItems(0,nodos)
+        text = scene.addText(raiz.getRaiz())
+        text.setPos(18, 13)
 
-    def recurrir(self, raiz, nodo):
-        nodos = []
+        self.conteo = np.zeros(self.controlador.getNAtributos() + 1)
 
-        nodo = QTreeWidgetItem(raiz)
-        nodo.setText(0, raiz.getRaiz())
-        nodo.setText(1, raiz.getPadre())
-        nodos.append(nodo)
 
-        for hijo in raiz.getHijos():
-            nodos.append(self.recurrir(hijo, nodo))
+        if(raiz.getHijos()): self.recurrir(raiz.getHijos(), 0, scene, elipse)
 
-        return nodos
+
+        self.ui.viewer.setScene(scene)
+        self.ui.viewer.show()
+
+
+    def recurrir(self, nodos, nivel, scene, padre, posicion = 0):
+        nivel = nivel + 1
+        elipses = []
+        textos = []
+
+        for nodo in nodos:
+            elipse = scene.addEllipse(0, 0, 100, 45)
+            elipse.setPos(100*self.conteo[nivel], nivel*nivel * 80)
+            elipse.setBrush(QColor(240, 240, 255))
+
+            line = scene.addLine(padre.pos().x() + 40, padre.pos().y() + 50, elipse.x() + 50, elipse.y())
+
+            text = scene.addText(nodo.getRaiz())
+            text.setPos(100*self.conteo[nivel] + 18, nivel*nivel * 80 + 13)
+
+            text2 = scene.addText(nodo.getPadre())
+            text2.setPos(100 * self.conteo[nivel], nivel * nivel * 80 - 30)
+            elipses.append(elipse)
+            textos.append(text)
+            self.conteo[nivel] = self.conteo[nivel] + 1
+
+        self.conteo[nivel] = self.conteo[nivel] + 1
+        for i,nodo in enumerate(nodos):
+            if (nodo.getHijos()): self.recurrir(nodo.getHijos(), nivel, scene, elipses[i])
+            else: return len(nodos)
+
+
+
+
+
+
+
 
 class Controlador:
     def __init__(self, vista = None):
@@ -246,12 +282,17 @@ class Controlador:
         array = []
 
         file = open(cabecera, "r")
+
+
         cabeceras = file.read().strip("\n").split(",")
         file.close()
+        app.processEvents()
+
 
         file = open(atributos, "r")
-        atributos = file.readlines()
 
+
+        atributos = file.readlines()
         for linea in atributos:
             array.append(linea.strip("\n").split(","))
 
@@ -259,10 +300,15 @@ class Controlador:
         self.tabla = Tabla(cabeceras,array)
         print("stop")
 
+    def getNFilas(self):
+        return self.tabla.getNFilas()
+
+    def getNAtributos(self):
+        return self.tabla.getNColumnas()
+
     def go(self):
         algoritmo = ID3(self.tabla)
         raiz = algoritmo.go()
-        cadena = self.toString(raiz)
 
         self.vista.mostrar(raiz)
 
