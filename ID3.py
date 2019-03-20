@@ -208,6 +208,7 @@ class MyApp(QMainWindow):
         self.controlador = Controlador(self)
         self.ui.goButton.clicked.connect(self.go)
         self.conteo = np.zeros(0)
+        self.raiz = Nodo()
         self.ui.error1.hide()
 
     def go(self):
@@ -229,44 +230,73 @@ class MyApp(QMainWindow):
 
         text = scene.addText(raiz.getRaiz())
         text.setPos(18, 13)
+        text = scene.addText(raiz.getRaiz())
+        text1 = scene.addText("RAIZ")
+        text1.setPos(0, -30)
+
+        self.raiz = Nodo(elipse,[text,text1])
 
         self.conteo = np.zeros(self.controlador.getNAtributos() + 1)
 
 
-        if(raiz.getHijos()): self.recurrir(raiz.getHijos(), 0, scene, elipse)
+        if(raiz.getHijos()):
+            self.recurrir(raiz.getHijos(), 0, scene, self.raiz)
+            self.redim(self.raiz,0,scene)
+            self.unir(self.raiz,scene)
 
 
         self.ui.viewer.setScene(scene)
         self.ui.viewer.show()
 
+    def unir(self, padre, scene):
+        for hijo in padre.getHijos():
+            scene.addLine(padre.getRaiz().x() + 40, padre.getRaiz().y() + 50, hijo.getRaiz().x() + 50, hijo.getRaiz().y())
+            self.unir(hijo,scene)
 
-    def recurrir(self, nodos, nivel, scene, padre, posicion = 0):
+    def redim(self, padre,nivel, scene):
+        elipse = padre.getRaiz()
+        text1 = padre.getPadre()[0]
+        text2 = padre.getPadre()[1]
+
+        desplazamiento = (np.amax(self.conteo) - self.conteo[nivel]) / 2
+        elipse.setPos(elipse.x() + desplazamiento * 100, elipse.y())
+        text1.setPos(elipse.x()+18,elipse.y()+13)
+        text2.setPos(elipse.x(), elipse.y()-30)
+        for hijo in padre.getHijos():
+            self.redim(hijo,nivel+1,scene)
+
+    def recurrir(self, nodos, nivel, scene, npadre):
         nivel = nivel + 1
         elipses = []
         textos = []
-
+        tam = len(nodos)
         for nodo in nodos:
             elipse = scene.addEllipse(0, 0, 100, 45)
-            elipse.setPos(100*self.conteo[nivel], nivel*nivel * 80)
+            elipse.setPos(100*self.conteo[nivel], nivel * 150)
             elipse.setBrush(QColor(240, 240, 255))
 
-            line = scene.addLine(padre.pos().x() + 40, padre.pos().y() + 50, elipse.x() + 50, elipse.y())
-
             text = scene.addText(nodo.getRaiz())
-            text.setPos(100*self.conteo[nivel] + 18, nivel*nivel * 80 + 13)
+            text.setPos(100*self.conteo[nivel] + 18, nivel * 80 + 13)
 
             text2 = scene.addText(nodo.getPadre())
-            text2.setPos(100 * self.conteo[nivel], nivel * nivel * 80 - 30)
+            text2.setPos(100 * self.conteo[nivel], nivel * 150 - 30)
+
+            npadre.setHijo(Nodo(elipse,[text,text2]))
+
             elipses.append(elipse)
             textos.append(text)
+
             self.conteo[nivel] = self.conteo[nivel] + 1
 
         self.conteo[nivel] = self.conteo[nivel] + 1
         for i,nodo in enumerate(nodos):
-            if (nodo.getHijos()): self.recurrir(nodo.getHijos(), nivel, scene, elipses[i])
+            if (nodo.getHijos()): self.recurrir(nodo.getHijos(), nivel, scene, npadre.getHijos()[i])
             else: return len(nodos)
 
 
+
+
+        return tam
 
 
 
