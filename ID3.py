@@ -154,8 +154,14 @@ class Nodo:
     def setHijo(self, hijo):
         self.hijos.append(hijo)
 
+    def setHijos(self, arr):
+        self.hijos = arr
+
     def getHijos(self):
         return self.hijos
+
+    def removeHijos(self):
+        self.hijos = []
 
     def __eq__(self,other):
         if isinstance(other, Nodo):
@@ -182,14 +188,22 @@ class ID3:
 
         #Solo una columna
         if tabla.getNColumnas() == 2:
+            cpos = 0
 
             for i, fila in enumerate(tabla.getFilas()):
                 if fila.getDecision():
+                    cpos = cpos + 1
                     if Nodo("si",fila.getAtributos()[0]) not in padre.getHijos():
                         padre.setHijo(Nodo("si",fila.getAtributos()[0]))
                 else:
                     if Nodo("no", fila.getAtributos()[0]) not in padre.getHijos():
                         padre.setHijo(Nodo("no",fila.getAtributos()[0]))
+
+            if cpos == 0:
+                padre.setHijos([Nodo("no","cualquiera")])
+            elif cpos == len(tabla.getFilas()):
+                padre.setHijos([Nodo("si","cualquiera")])
+
         else:
             tabla.sesgar(valor);
             atributo = tabla.merito()
@@ -229,15 +243,14 @@ class MyApp(QMainWindow):
         elipse.setBrush(QColor(245, 235, 255))
 
         text = scene.addText(raiz.getRaiz())
-        text.setPos(18, 13)
-        text = scene.addText(raiz.getRaiz())
+
         text1 = scene.addText("RAIZ")
-        text1.setPos(0, -30)
+
 
         self.raiz = Nodo(elipse,[text,text1])
 
         self.conteo = np.zeros(self.controlador.getNAtributos() + 1)
-
+        self.conteo[0] = 2
 
         if(raiz.getHijos()):
             self.recurrir(raiz.getHijos(), 0, scene, self.raiz)
@@ -247,6 +260,9 @@ class MyApp(QMainWindow):
 
         self.ui.viewer.setScene(scene)
         self.ui.viewer.show()
+        self.ui.viewer.verticalScrollBar().setValue(self.ui.viewer.verticalScrollBar().minimum())
+        self.ui.viewer.horizontalScrollBar().setValue(int(self.ui.viewer.horizontalScrollBar().maximum()/2))
+
 
     def unir(self, padre, scene):
         for hijo in padre.getHijos():
@@ -262,6 +278,7 @@ class MyApp(QMainWindow):
         elipse.setPos(elipse.x() + desplazamiento * 100, elipse.y())
         text1.setPos(elipse.x()+18,elipse.y()+13)
         text2.setPos(elipse.x(), elipse.y()-30)
+
         for hijo in padre.getHijos():
             self.redim(hijo,nivel+1,scene)
 
@@ -276,10 +293,7 @@ class MyApp(QMainWindow):
             elipse.setBrush(QColor(240, 240, 255))
 
             text = scene.addText(nodo.getRaiz())
-            text.setPos(100*self.conteo[nivel] + 18, nivel * 80 + 13)
-
             text2 = scene.addText(nodo.getPadre())
-            text2.setPos(100 * self.conteo[nivel], nivel * 150 - 30)
 
             npadre.setHijo(Nodo(elipse,[text,text2]))
 
