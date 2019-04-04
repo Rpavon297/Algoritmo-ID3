@@ -5,7 +5,7 @@ import sys
 import numpy as np
 from PyQt5 import uic
 from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import QMainWindow, QApplication, QGraphicsScene
+from PyQt5.QtWidgets import QMainWindow, QApplication, QGraphicsScene, QTableWidgetItem, QFileDialog
 
 qtCreatorFile = "GUIID3.ui"
 
@@ -76,6 +76,9 @@ class Tabla:
         for fila in self.filas:
             fila.removeAtributo(nombre)
 
+    def addFila(self, nfila):
+        self.filas.append(Fila(self.atributos.copy(), nfila))
+
     def getFila(self, i):
         if i < len(self.filas):
             return self.filas[i]
@@ -85,6 +88,10 @@ class Tabla:
     def getFilas(self):
         return self.filas
 
+    def getAtributos(self):
+        return self.atributos
+
+    #Devuelve el atributo con menor mérito
     def merito(self):
         mejor = math.inf
         ret = self.atributos[0]
@@ -100,6 +107,7 @@ class Tabla:
 
         return ret
 
+    #Devuelve el mérito de la columna "columna"
     def meritoCol(self, columna):
         merito = 0
         index = self.atributos.index(columna)
@@ -138,8 +146,8 @@ class Tabla:
                 return True
         return False
 
+    #Modifica la tabla para quitar las filas en las que no aparece "valor" y luego elimina "atributo" de las columnas
     def sesgar(self, atributo, valor):
-
         nuevaTabla = [fila for fila in self.filas if fila.getAtributo(atributo) == valor]
         self.filas = nuevaTabla
 
@@ -227,24 +235,7 @@ class ID3:
                     tabla_c = copy.deepcopy(tabla)
                     tabla_c.sesgar(atributo, elem)
                     self.recurrir(tabla_c, nuevo, elem)
-                if nuevo.getHijos():
-                    padre.setHijo(nuevo)
-                    posis = 0
-                    negas = 0
-                    nhijos = len(nuevo.getHijos())
-
-                    for hijo in nuevo.getHijos():
-                        if hijo.getRaiz() == "si":
-                            posis = posis + 1
-                        elif hijo.getRaiz() == "no":
-                            negas = negas + 1
-
-                    if negas == nhijos:
-                        # nuevo.removeHijos()
-                        nuevo.setRaiz("no")
-                    elif posis == nhijos:
-                        # nuevo.removeHijos()
-                        nuevo.setRaiz("si")
+                padre.setHijo(nuevo)
 
 
 class MyApp(QMainWindow):
@@ -254,21 +245,101 @@ class MyApp(QMainWindow):
         self.ui.setupUi(self)
         self.controlador = Controlador(self)
         self.ui.goButton.clicked.connect(self.go)
+        self.ui.loadButton.clicked.connect(self.load)
+        self.ui.addRowButton.clicked.connect(self.addRow)
+        self.ui.findAt.clicked.connect(self.openAttDialog)
+        self.ui.findGa.clicked.connect(self.openGameDialog)
+        self.ui.resetButton.clicked.connect(self.reset)
         self.conteo = np.zeros(0)
         self.raiz = Nodo()
         self.ui.error1.hide()
+        self.ui.error2.hide()
+        self.ui.error3.hide()
 
-    def go(self):
-
+    def load(self):
         self.ui.error1.hide()
+        self.ui.error2.hide()
+        self.ui.error3.hide()
 
         try:
             self.controlador.cargarTabla(self.ui.input_att.toPlainText(), self.ui.input_cabecera.toPlainText())
+            self.mostrarTabla()
         except Exception as e:
             print(str(e))
             self.ui.error1.show()
 
-        self.controlador.go()
+    def reset(self):
+        self.ui.error1.hide()
+        self.ui.error2.hide()
+        self.ui.error3.hide()
+
+        self.controlador = Controlador(self)
+
+        while self.ui.table.rowCount() > 0:
+            self.ui.table.removeRow(0)
+
+    def openAttDialog(self):
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        nombre, _ = QFileDialog.getOpenFileName(self, "QFileDialog.getOpenFileName()", "",
+                                                  "Normal text file (*.txt)", options=options)
+        if nombre:
+            self.ui.input_cabecera.setText(nombre)
+
+    def openGameDialog(self):
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        nombre, _ = QFileDialog.getOpenFileName(self, "QFileDialog.getOpenFileName()", "",
+                                                  "Normal text file (*.txt)", options=options)
+        if nombre:
+            self.ui.input_att.setText(nombre)
+
+    def addRow(self):
+        try:
+            columnas = self.ui.table.columnCount()
+            nfila = []
+
+            for i in range(columnas):
+                nfila.append(self.ui.newRow.item(0,i).text())
+
+            rowpos = self.ui.table.rowCount()
+            self.ui.table.insertRow(rowpos)
+
+            for j, atributo in enumerate(nfila):
+                self.ui.table.setItem(rowpos,j, QTableWidgetItem(atributo))
+
+            self.cargarDesdeTabla()
+        except Exception as e:
+            self.ui.error3.show()
+
+    def cargarDesdeTabla(self):
+        filas = self.ui.table.rowCount()
+        columnas = self.ui.table.columnCount()
+        array = []
+        cabecera = []
+
+        for i in range(filas):
+            fila = []
+            for j in range(columnas):
+                fila.append(self.ui.table.item(i,j).text())
+            array.append(fila)
+
+        for j in range(columnas):
+            cabecera.append(self.ui.table.horizontalHeaderItem(j).text())
+
+        self.controlador.setTabla(Tabla(cabecera, array))
+
+    def go(self):
+        self.ui.error1.hide()
+        self.ui.error2.hide()
+        self.ui.error3.hide()
+
+        if self.controlador.getCargado():
+            self.cargarDesdeTabla()
+            self.controlador.go()
+
+        else:
+            self.ui.error2.show()
 
     def mostrar(self, raiz):
         scene = QGraphicsScene()
@@ -294,6 +365,24 @@ class MyApp(QMainWindow):
         self.ui.viewer.show()
         self.ui.viewer.verticalScrollBar().setValue(self.ui.viewer.verticalScrollBar().minimum())
         self.ui.viewer.horizontalScrollBar().setValue(int(self.ui.viewer.horizontalScrollBar().maximum() / 2))
+
+    def mostrarTabla(self):
+        tabla = self.controlador.getTabla()
+
+        self.ui.table.setColumnCount(tabla.getNColumnas())
+        self.ui.table.setRowCount(tabla.getNFilas())
+        self.ui.table.setHorizontalHeaderLabels(tabla.getAtributos())
+
+        self.ui.newRow.setRowCount(1)
+        self.ui.newRow.setColumnCount(tabla.getNColumnas())
+        self.ui.newRow.setHorizontalHeaderLabels(tabla.getAtributos())
+        self.ui.newRow.setVerticalHeaderLabels([])
+
+        for i,fila in enumerate(tabla.getFilas()):
+            for j, atributo in enumerate(fila.getAtributos()):
+                self.ui.table.setItem(i,j, QTableWidgetItem(atributo))
+
+        self.ui.table.resizeColumnsToContents()
 
     def unir(self, padre, scene):
         for hijo in padre.getHijos():
@@ -365,6 +454,18 @@ class Controlador:
             array.append(linea.strip("\n").split(","))
 
         self.tabla = Tabla(cabeceras, array)
+
+    def addFila(self, fila):
+        self.tabla.addFila(fila)
+
+    def getCargado(self):
+        return self.tabla != None
+
+    def getTabla(self):
+        return self.tabla
+
+    def setTabla(self, ntabla):
+        self.tabla = ntabla
 
     def getNFilas(self):
         return self.tabla.getNFilas()
