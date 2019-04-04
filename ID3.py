@@ -1,27 +1,21 @@
-import numpy as np
+import copy
+import math
+import sys
 
-import math, time, random, sys, copy
 import numpy as np
-from PyQt5.QtCore import QPointF
-from PyQt5.QtGui import QStandardItemModel, QPixmap, QColor
-
-from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QAction, QTableWidget, QTableWidgetItem, QVBoxLayout, \
-    QMessageBox, QTreeWidgetItem, QTreeView, QGraphicsView, QGraphicsScene
-from PyQt5 import uic, QtGui
+from PyQt5 import uic
+from PyQt5.QtGui import QColor
+from PyQt5.QtWidgets import QMainWindow, QApplication, QGraphicsScene
 
 qtCreatorFile = "GUIID3.ui"
 
 Ui_MainWindow, QtBaseClass = uic.loadUiType(qtCreatorFile)
 
-class Fila:
-    def __init__(self, natributos = [], atributos = []):
-        self.atributos = []
-        self.nombres = []
 
-        for elem in atributos:
-            self.atributos.append(elem)
-        for elem in natributos:
-            self.nombres.append(elem)
+class Fila:
+    def __init__(self, natributos=[], atributos=[]):
+        self.atributos = atributos.copy()
+        self.nombres = natributos.copy()
 
     def getDecision(self):
         return self.atributos[-1] == "si"
@@ -34,7 +28,8 @@ class Fila:
     def getAtributo(self, nombre):
         if nombre in self.nombres:
             return self.atributos[self.nombres.index(nombre)]
-        else: return None
+        else:
+            return None
 
     def getAtributos(self):
         return self.atributos
@@ -42,8 +37,17 @@ class Fila:
     def getNColumnas(self):
         return len(self.atributos)
 
+    def __str__(self):
+        cad = ""
+
+        for elem in self.atributos:
+            cad = cad + elem + ", "
+
+        return cad
+
+
 class Tabla:
-    def __init__(self,cabecera = [], nfilas = []):
+    def __init__(self, cabecera=[], nfilas=[]):
         self.filas = []
         self.atributos = cabecera.copy()
         self.dominio = []
@@ -51,16 +55,16 @@ class Tabla:
         for i in range(len(cabecera)):
             self.dominio.append([nfilas[0][i]])
 
-        for i,fila in enumerate(nfilas):
-            self.filas.append(Fila(cabecera.copy(),fila.copy()))
+        for i, fila in enumerate(nfilas):
+            self.filas.append(Fila(cabecera.copy(), fila.copy()))
 
             for j in range(len(self.dominio)):
                 if fila[j] not in self.dominio[j]:
                     self.dominio[j].append(fila[j])
 
-
     def getNColumnas(self):
         return len(self.atributos)
+
     def getNFilas(self):
         return len(self.filas)
 
@@ -73,15 +77,17 @@ class Tabla:
             fila.removeAtributo(nombre)
 
     def getFila(self, i):
-        if i < len(self.filas): return self.filas[i]
-        else: return None
+        if i < len(self.filas):
+            return self.filas[i]
+        else:
+            return None
 
     def getFilas(self):
         return self.filas
 
     def merito(self):
-        mejor = 0
-        ret = None
+        mejor = math.inf
+        ret = self.atributos[0]
 
         for i in range(len(self.atributos) - 1):
             columna = self.atributos[i]
@@ -92,7 +98,7 @@ class Tabla:
                 mejor = aux
                 ret = columna
 
-        return columna
+        return ret
 
     def meritoCol(self, columna):
         merito = 0
@@ -100,9 +106,8 @@ class Tabla:
         cont = np.zeros(len(self.dominio[index]))
         posis = np.zeros(len(self.dominio[index]))
 
-
         for fila in self.filas:
-            for i,variable in enumerate(self.dominio[index]):
+            for i, variable in enumerate(self.dominio[index]):
                 if variable == fila.getAtributo(columna):
                     cont[i] = cont[i] + 1
 
@@ -110,37 +115,43 @@ class Tabla:
                         posis[i] = posis[i] + 1
 
         for i in range(len(self.dominio[index])):
-            if posis[i] == 0 or posis[i] == cont[i]: return 0
-            else:
-                p = posis[i]/cont[i]
-                n = 1-p
-                r = sum(cont)
+            if posis[i] != 0 and posis[i] != cont[i]:
+                p = posis[i] / cont[i]
+                n = 1 - p
+                N = sum(cont)
 
-                merito = merito + (r * self.informacion(p,n))
+                r = cont[i] / N
+
+                merito = merito + (r * self.informacion(p, n))
 
         return merito
 
-    def informacion(self,p,n):
-        return -float(p) * (math.log(float(p),2)) - float(n) * (math.log(float(n),2))
+    def informacion(self, p, n):
+        return -float(p) * (math.log(float(p), 2)) - float(n) * (math.log(float(n), 2))
 
-    def getDominio(self,atributo):
+    def getDominio(self, atributo):
         return self.dominio[self.atributos.index(atributo)]
 
-    def sesgar(self, valor):
-        for i, columna in enumerate(self.dominio):
-            if valor in columna:
-                atributo = self.atributos[i]
-                for i,fila in enumerate(self.filas):
-                    if fila.getAtributo(atributo) != valor:
-                        del self.filas[i]
+    def contiene(self, atributo, valor):
+        for fila in self.filas:
+            if fila.getAtributo(atributo) == valor:
+                return True
+        return False
 
-                for fila in self.filas:
-                    fila.removeAtributo(atributo)
-                self.dominio.remove(columna)
-                self.atributos.remove(atributo)
+    def sesgar(self, atributo, valor):
+
+        nuevaTabla = [fila for fila in self.filas if fila.getAtributo(atributo) == valor]
+        self.filas = nuevaTabla
+
+        for fila in self.filas:
+            fila.removeAtributo(atributo)
+
+        del self.dominio[self.atributos.index(atributo)]
+        self.atributos.remove(atributo)
+
 
 class Nodo:
-    def __init__(self,raiz = None, padre = None):
+    def __init__(self, raiz=None, padre=None):
         self.raiz = raiz
         self.padre = padre
         self.hijos = []
@@ -150,6 +161,9 @@ class Nodo:
 
     def getRaiz(self):
         return self.raiz
+
+    def setRaiz(self, raiz):
+        self.raiz = raiz
 
     def setHijo(self, hijo):
         self.hijos.append(hijo)
@@ -163,56 +177,75 @@ class Nodo:
     def removeHijos(self):
         self.hijos = []
 
-    def __eq__(self,other):
+    def removeHijo(self, nodo):
+        self.hijos.remove(nodo)
+
+    def __eq__(self, other):
         if isinstance(other, Nodo):
             return self.raiz == other.getRaiz() and self.padre == other.getPadre()
         return False
+
     def __ne__(self, other):
         return not self.__eq__(other)
 
+
 class ID3:
-    def __init__(self, tabla = None):
+    def __init__(self, tabla=None):
         self.tabla = tabla
 
     def go(self):
         atributo = self.tabla.merito()
-        raiz = Nodo(atributo,None)
+        raiz = Nodo(atributo, None)
 
         for elem in self.tabla.getDominio(atributo):
-
-            self.recurrir(self.tabla,raiz,elem)
+            try:
+                tabla_c = copy.deepcopy(self.tabla)
+                tabla_c.sesgar(atributo, elem)
+                self.recurrir(tabla_c, raiz, elem)
+            except Exception as e:
+                print(str(e))
         return raiz
 
-    def recurrir(self, ntabla, padre, valor):
-        tabla = copy.deepcopy(ntabla)
+    def recurrir(self, tabla, padre, valor):
 
-        #Solo una columna
-        if tabla.getNColumnas() == 2:
+        if tabla.getNColumnas() > 0 and tabla.getNFilas() > 0:
             cpos = 0
 
-            for i, fila in enumerate(tabla.getFilas()):
+            for fila in tabla.getFilas():
                 if fila.getDecision():
                     cpos = cpos + 1
-                    if Nodo("si",fila.getAtributos()[0]) not in padre.getHijos():
-                        padre.setHijo(Nodo("si",fila.getAtributos()[0]))
-                else:
-                    if Nodo("no", fila.getAtributos()[0]) not in padre.getHijos():
-                        padre.setHijo(Nodo("no",fila.getAtributos()[0]))
 
             if cpos == 0:
-                padre.setHijos([Nodo("no","cualquiera")])
-            elif cpos == len(tabla.getFilas()):
-                padre.setHijos([Nodo("si","cualquiera")])
+                padre.setHijo(Nodo("no", valor))
+            elif cpos == tabla.getNFilas():
+                padre.setHijo(Nodo("si", valor))
+            else:
+                atributo = tabla.merito()
+                nuevo = Nodo(atributo, valor)
 
-        else:
-            tabla.sesgar(valor);
-            atributo = tabla.merito()
+                for elem in tabla.getDominio(atributo):
+                    tabla_c = copy.deepcopy(tabla)
+                    tabla_c.sesgar(atributo, elem)
+                    self.recurrir(tabla_c, nuevo, elem)
+                if nuevo.getHijos():
+                    padre.setHijo(nuevo)
+                    posis = 0
+                    negas = 0
+                    nhijos = len(nuevo.getHijos())
 
-            nuevo = Nodo(atributo, valor)
-            padre.setHijo(nuevo)
+                    for hijo in nuevo.getHijos():
+                        if hijo.getRaiz() == "si":
+                            posis = posis + 1
+                        elif hijo.getRaiz() == "no":
+                            negas = negas + 1
 
-            for elem in tabla.getDominio(atributo):
-                self.recurrir(tabla,nuevo,elem)
+                    if negas == nhijos:
+                        # nuevo.removeHijos()
+                        nuevo.setRaiz("no")
+                    elif posis == nhijos:
+                        # nuevo.removeHijos()
+                        nuevo.setRaiz("si")
+
 
 class MyApp(QMainWindow):
     def __init__(self):
@@ -231,7 +264,8 @@ class MyApp(QMainWindow):
 
         try:
             self.controlador.cargarTabla(self.ui.input_att.toPlainText(), self.ui.input_cabecera.toPlainText())
-        except:
+        except Exception as e:
+            print(str(e))
             self.ui.error1.show()
 
         self.controlador.go()
@@ -239,48 +273,46 @@ class MyApp(QMainWindow):
     def mostrar(self, raiz):
         scene = QGraphicsScene()
 
-        elipse = scene.addEllipse(0,0,100,50)
+        elipse = scene.addEllipse(0, 0, 100, 50)
         elipse.setBrush(QColor(245, 235, 255))
 
         text = scene.addText(raiz.getRaiz())
 
         text1 = scene.addText("RAIZ")
 
-
-        self.raiz = Nodo(elipse,[text,text1])
+        self.raiz = Nodo(elipse, [text, text1])
 
         self.conteo = np.zeros(self.controlador.getNAtributos() + 1)
         self.conteo[0] = 2
 
-        if(raiz.getHijos()):
+        if (raiz.getHijos()):
             self.recurrir(raiz.getHijos(), 0, scene, self.raiz)
-            self.redim(self.raiz,0,scene)
-            self.unir(self.raiz,scene)
-
+            self.redim(self.raiz, 0, scene)
+            self.unir(self.raiz, scene)
 
         self.ui.viewer.setScene(scene)
         self.ui.viewer.show()
         self.ui.viewer.verticalScrollBar().setValue(self.ui.viewer.verticalScrollBar().minimum())
-        self.ui.viewer.horizontalScrollBar().setValue(int(self.ui.viewer.horizontalScrollBar().maximum()/2))
-
+        self.ui.viewer.horizontalScrollBar().setValue(int(self.ui.viewer.horizontalScrollBar().maximum() / 2))
 
     def unir(self, padre, scene):
         for hijo in padre.getHijos():
-            scene.addLine(padre.getRaiz().x() + 40, padre.getRaiz().y() + 50, hijo.getRaiz().x() + 50, hijo.getRaiz().y())
-            self.unir(hijo,scene)
+            scene.addLine(padre.getRaiz().x() + 40, padre.getRaiz().y() + 50, hijo.getRaiz().x() + 50,
+                          hijo.getRaiz().y())
+            self.unir(hijo, scene)
 
-    def redim(self, padre,nivel, scene):
+    def redim(self, padre, nivel, scene):
         elipse = padre.getRaiz()
         text1 = padre.getPadre()[0]
         text2 = padre.getPadre()[1]
 
         desplazamiento = (np.amax(self.conteo) - self.conteo[nivel]) / 2
         elipse.setPos(elipse.x() + desplazamiento * 100, elipse.y())
-        text1.setPos(elipse.x()+18,elipse.y()+13)
-        text2.setPos(elipse.x(), elipse.y()-30)
+        text1.setPos(elipse.x() + 18, elipse.y() + 13)
+        text2.setPos(elipse.x(), elipse.y() - 30)
 
         for hijo in padre.getHijos():
-            self.redim(hijo,nivel+1,scene)
+            self.redim(hijo, nivel + 1, scene)
 
     def recurrir(self, nodos, nivel, scene, npadre):
         nivel = nivel + 1
@@ -289,13 +321,13 @@ class MyApp(QMainWindow):
         tam = len(nodos)
         for nodo in nodos:
             elipse = scene.addEllipse(0, 0, 100, 45)
-            elipse.setPos(100*self.conteo[nivel], nivel * 150)
+            elipse.setPos(100 * self.conteo[nivel], nivel * 150)
             elipse.setBrush(QColor(240, 240, 255))
 
             text = scene.addText(nodo.getRaiz())
             text2 = scene.addText(nodo.getPadre())
 
-            npadre.setHijo(Nodo(elipse,[text,text2]))
+            npadre.setHijo(Nodo(elipse, [text, text2]))
 
             elipses.append(elipse)
             textos.append(text)
@@ -303,46 +335,36 @@ class MyApp(QMainWindow):
             self.conteo[nivel] = self.conteo[nivel] + 1
 
         self.conteo[nivel] = self.conteo[nivel] + 1
-        for i,nodo in enumerate(nodos):
-            if (nodo.getHijos()): self.recurrir(nodo.getHijos(), nivel, scene, npadre.getHijos()[i])
-            else: return len(nodos)
+        hoja = True
+        for i, nodo in enumerate(nodos):
+            if (nodo.getHijos()):
+                self.recurrir(nodo.getHijos(), nivel, scene, npadre.getHijos()[i])
+                hoja = False
 
-
-
-
+        if hoja: return len(nodos)
         return tam
 
 
-
-
-
-
 class Controlador:
-    def __init__(self, vista = None):
+    def __init__(self, vista=None):
         self.vista = vista
         self.tabla = None
 
     def cargarTabla(self, atributos, cabecera):
         array = []
-
         file = open(cabecera, "r")
-
 
         cabeceras = file.read().strip("\n").split(",")
         file.close()
         app.processEvents()
 
-
         file = open(atributos, "r")
-
-
         atributos = file.readlines()
+
         for linea in atributos:
             array.append(linea.strip("\n").split(","))
 
-        del array[-1]
-        self.tabla = Tabla(cabeceras,array)
-        print("stop")
+        self.tabla = Tabla(cabeceras, array)
 
     def getNFilas(self):
         return self.tabla.getNFilas()
@@ -357,12 +379,13 @@ class Controlador:
         self.vista.mostrar(raiz)
 
     def toString(self, raiz):
-        cadena =  [str(raiz.getRaiz()),str(raiz.getPadre())]
+        cadena = [str(raiz.getRaiz()), str(raiz.getPadre())]
 
         for hijo in raiz.getHijos():
             cadena = cadena + self.toString(hijo)
 
         return cadena
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
